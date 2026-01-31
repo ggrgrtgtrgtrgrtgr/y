@@ -1130,11 +1130,22 @@ local function createAdminTab()
 
             MessagingService:SubscribeAsync("Capatrolity_Admin", function(msg)
                 local data = msg.Data
-                if type(data) == "table" and data.Target == LocalPlayer.Name then
-                    if data.Type == "Alert" then
-                        notify("ADMIN MESSAGE", data.Content or "No content", "Warning")
-                    elseif data.Type == "Kick" then
-                        LocalPlayer:Kick("You have been globally kicked by an Administrator.")
+                if type(data) == "table" then
+                    if data.Type == "ConnectAll" then
+                        notify("Global System", data.Content or "connected!", "Success")
+                    elseif data.Type == "GlobalKick" then
+                        -- Check if we are the targeted key or if we are in the count-to-kick group
+                        if data.Key and tostring(LocalPlayer.UserId) == tostring(data.Key) then
+                            LocalPlayer:Kick("You have been targeted by a Global Admin Key-Kick.")
+                        elseif not data.Key then
+                             -- Logic for "count" without a specific key could be added here
+                        end
+                    elseif data.Target == LocalPlayer.Name then
+                        if data.Type == "Alert" then
+                            notify("ADMIN MESSAGE", data.Content or "No content", "Warning")
+                        elseif data.Type == "Kick" then
+                            LocalPlayer:Kick("You have been globally kicked by an Administrator.")
+                        end
                     end
                 end
             end)
@@ -1147,8 +1158,54 @@ local function createAdminTab()
                 end
             end)
 
+            -- COMMAND HANDLER LOGIC
+            local function handleCommand(input)
+                local cmd = input:lower()
+                if cmd:find("/connect all") then
+                    MessagingService:PublishAsync("Capatrolity_Admin", {Type = "ConnectAll", Content = "connected!"})
+                    notify("Admin Console", "Broadcasted connection signal.", "Success")
+                elseif cmd:find("/kick") then
+                    local key = cmd:match("key:(%d+)")
+                    local count = tonumber(cmd:match("count:(%d+)") or "1")
+                    MessagingService:PublishAsync("Capatrolity_Admin", {Type = "GlobalKick", Key = key, Count = count})
+                    notify("Admin Console", "Sent global kick command.", "Error")
+                end
+            end
+
+            -- CONSOLE UI
+            local ConsoleFrame = Instance.new("Frame")
+            ConsoleFrame.Size = UDim2.new(1, 0, 0, 45)
+            ConsoleFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            ConsoleFrame.Parent = AdminCat
+            Instance.new("UICorner", ConsoleFrame).CornerRadius = UDim.new(0, 8)
+            
+            local ConsoleBox = Instance.new("TextBox")
+            ConsoleBox.PlaceholderText = "> Type command here... (/connect all, /kick)"
+            ConsoleBox.Size = UDim2.new(1, -20, 1, 0)
+            ConsoleBox.Position = UDim2.new(0, 10, 0, 0)
+            ConsoleBox.BackgroundTransparency = 1
+            ConsoleBox.TextColor3 = Color3.fromRGB(0, 255, 0)
+            ConsoleBox.Font = Enum.Font.Code
+            ConsoleBox.TextSize = 12
+            ConsoleBox.TextXAlignment = Enum.TextXAlignment.Left
+            ConsoleBox.Parent = ConsoleFrame
+            
+            ConsoleBox.FocusLost:Connect(function(enter)
+                if enter and ConsoleBox.Text ~= "" then
+                    handleCommand(ConsoleBox.Text)
+                    ConsoleBox.Text = ""
+                end
+            end)
+
+            -- CHAT INTEGRATION
+            LocalPlayer.Chatted:Connect(function(msg)
+                if msg:sub(1,1) == "/" then
+                    handleCommand(msg)
+                end
+            end)
+
+            -- BROADCAST BUTTON
             createButton(AdminCat, "BroadCast Global Alert", function()
-                local box = Instance.new("TextBox") -- Temporary input for simple broadcast
                 MessagingService:PublishAsync("Capatrolity_Admin", {Type = "Alert", Content = "Global Announcement from Admin Hub!"})
                 notify("Sent", "Broadcasted to all servers.", "Success")
             end)
